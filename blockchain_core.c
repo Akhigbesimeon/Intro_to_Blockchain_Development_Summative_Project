@@ -791,3 +791,53 @@ int main() {
             printf("Submitting transfer to mempool...\n");
             add_to_mempool(tx, 0.1);
         }
+
+	 // Insurance operations
+        else if (strcmp(cmd, "pay_premium") == 0 && arg1 && arg2) {
+            pay_premium(arg1, atof(arg2));
+        }
+        else if (strcmp(cmd, "submit_claim") == 0 && arg1 && arg2 && arg3) {
+            Policy* p = get_policy(arg2);
+            Account* sender = get_account(arg2);
+
+            if (p == NULL) printf("ERROR: Policy does not exist for member.\n");
+            else if (time(NULL) > p->expiry_date) printf("ERROR: Policy EXPIRED. Claim rejected.\n");
+            else if (sender == NULL) printf("ERROR: Sender account not found.\n");
+            else {
+                Transaction tx = {0};
+                snprintf(tx.transaction_id, sizeof(tx.transaction_id), "CLM_%ld", (long)time(NULL));
+                strcpy(tx.sender_address, sender->address);
+                strcpy(tx.receiver_address, arg1);
+                tx.amount = atof(arg3);
+                tx.transaction_type = 3;
+                tx.timestamp = time(NULL);
+                tx.sender_nonce = sender->nonce + 1;
+
+                printf("Signing transaction with private key...\n");
+                sign_transaction(&tx, sender->priv_key);
+
+                printf("Validating and submitting claim to mempool...\n");
+                add_to_mempool(tx, 0.5);
+            }
+        }
+        else if (strcmp(cmd, "approve_claim") == 0 && arg1) {
+            process_system_tx("INSURANCE_POOL", arg1, 7, "Claim officially approved on-chain.");
+        }
+        else if (strcmp(cmd, "reject_claim") == 0 && arg1) {
+            process_system_tx("INSURANCE_POOL", arg1, 8, "Claim officially rejected on-chain.");
+        }
+        else if (strcmp(cmd, "settle_claim") == 0 && arg1 && arg2) {
+            settle_claim(arg1, atof(arg2));
+        }
+        else if ((strcmp(cmd, "service_request") == 0 || strcmp(cmd, "preauth_request") == 0) && arg1 && arg2) {
+            printf("Request logged for %s. Awaiting authorization.\n", arg1);
+        }
+        else if (strcmp(cmd, "preauth_request") == 0 && arg1 && arg2) {
+            process_system_tx(arg1, "INSURANCE_POOL", 5, "Pre-auth requested on-chain.");
+        }
+        else if (strcmp(cmd, "preauth_approve") == 0 && arg1) {
+            printf("Pre-authorization %s approved.\n", arg1);
+        }
+        else if (strcmp(cmd, "reinsurance_balance") == 0) {
+            printf("Reinsurance Pool: %.2f AHT\n", reinsurance_pool_balance);
+        }
