@@ -770,3 +770,24 @@ int main() {
                 else printf("Policy for %s is ACTIVE.\n", arg1);
             } else printf("Policy not found.\n");
         }
+
+	// Token & Account transfer
+        else if ((strcmp(cmd, "token_transfer") == 0 || strcmp(cmd, "account_transfer") == 0 || strcmp(cmd, "create_transaction") == 0) && arg1 && arg2 && arg3) {
+            Account* sender = get_account(arg1);
+            if (!sender) { printf("ERROR: Sender account not found.\n"); continue; }
+
+            Transaction tx = {0};
+            snprintf(tx.transaction_id, sizeof(tx.transaction_id), "TX_%ld", (long)time(NULL));
+            strcpy(tx.sender_address, sender->address);
+            strcpy(tx.receiver_address, arg2);
+            tx.amount = atof(arg3);
+            tx.transaction_type = 1;
+            tx.timestamp = time(NULL);
+            tx.sender_nonce = sender->nonce + 1;
+
+            printf("Signing transaction with private key...\n");
+            sign_transaction(&tx, sender->priv_key);
+
+            printf("Submitting transfer to mempool...\n");
+            add_to_mempool(tx, 0.1);
+        }
