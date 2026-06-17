@@ -315,3 +315,39 @@ int is_hash_valid(const char* hash, uint32_t difficulty) {
     for (uint32_t i = 0; i < difficulty; i++) if (hash[i] != '0') return 0;
     return 1;
 }
+
+// Account & UTXO management
+Account* get_account(const char* address) {
+    for (int i = 0; i < account_count; i++) {
+        if (strstr(accounts[i].address, address) != NULL) return &accounts[i];
+    }
+    return NULL;
+}
+
+void create_utxo(const char* tx_id, const char* owner, double amount) {
+    if (utxo_count >= MAX_UTXOS) return;
+    strcpy(utxo_set[utxo_count].transaction_id, tx_id);
+    strcpy(utxo_set[utxo_count].owner_address, owner);
+    utxo_set[utxo_count].amount = amount;
+    utxo_set[utxo_count].is_spent = 0;
+    utxo_count++;
+}
+
+int consume_utxos_for_amount(const char* owner, double required_amount) {
+    double accumulated = 0.0;
+    for (int i = 0; i < utxo_count; i++) {
+        if (strcmp(utxo_set[i].owner_address, owner) == 0 && utxo_set[i].is_spent == 0) {
+            utxo_set[i].is_spent = 1;
+            accumulated += utxo_set[i].amount;
+            if (accumulated >= required_amount) {
+                if (accumulated > required_amount) {
+                    char change_id[65];
+                    snprintf(change_id, sizeof(change_id), "CHANGE_%ld", (long)time(NULL));
+                    create_utxo(change_id, owner, accumulated - required_amount);
+                }
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
