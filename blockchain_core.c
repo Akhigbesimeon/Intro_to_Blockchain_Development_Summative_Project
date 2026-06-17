@@ -707,3 +707,38 @@ int main() {
             save_chain_state();
             break;
         }
+
+	   // Membership management
+        else if (strcmp(cmd, "register_member") == 0 && arg1 && arg2) {
+            if (get_account(arg1) != NULL) {
+                printf("ERROR: Member wallet %s is already registered on the network.\n", arg1);
+            } else if (account_count < MAX_ACCOUNTS) {
+                Account new_acc;
+                new_acc.balance = atof(arg2);
+                new_acc.nonce = 0;
+
+                char pub_hex[135], priv_hex[70];
+                generate_wallet_keys(pub_hex, priv_hex);
+
+                // Store ID mapped with public hex key
+                snprintf(new_acc.address, sizeof(new_acc.address), "%s_%s", arg1, pub_hex);
+                strcpy(new_acc.priv_key, priv_hex);
+
+                accounts[account_count++] = new_acc;
+                printf("Member wallet %s registered with %.2f AHT.\n", arg1, new_acc.balance);
+            } else {
+                printf("Failed to register member. Network limit reached.\n");
+            }
+        }
+
+        else if ((strcmp(cmd, "view_member") == 0 || strcmp(cmd, "wallet_balance") == 0 || strcmp(cmd, "token_balance") == 0 || strcmp(cmd, "account_balance") == 0) && arg1) {
+            Account* acc = get_account(arg1);
+            if (acc) printf("Wallet %s | Balance: %.2f AHT | Nonce: %u\n", arg1, acc->balance, acc->nonce);
+            else printf("Wallet %s not found.\n", arg1);
+        }
+
+        else if (strcmp(cmd, "account_nonce") == 0 && arg1) {
+            Account* acc = get_account(arg1);
+            if (acc) printf("Wallet %s Current Nonce: %u\n", arg1, acc->nonce);
+            else printf("Wallet not found.\n");
+        }
