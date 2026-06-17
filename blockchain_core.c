@@ -118,3 +118,30 @@ ChainState chain_state = {4, 50.0, 0};
 void generate_wallet_keys(char* pub_hex, char* priv_hex);
 Account* get_account(const char* address);
 void sign_transaction(Transaction *tx, const char *priv_hex);
+
+// System Initialization
+void initialize_system_wallets() {
+    // Create Insurance Pool Wallet
+    if (get_account("INSURANCE_POOL") == NULL) {
+        Account pool; pool.balance = 50000.0; pool.nonce = 0;
+        char pub[135], priv[70]; generate_wallet_keys(pub, priv);
+        snprintf(pool.address, sizeof(pool.address), "INSURANCE_POOL_%s", pub);
+        strcpy(pool.priv_key, priv); accounts[account_count++] = pool;
+    }
+
+    // Create Reinsurance Pool Wallet
+    if (get_account("REINSURANCE_POOL") == NULL) {
+        Account re_pool; re_pool.balance = 0.0; re_pool.nonce = 0;
+        char pub[135], priv[70]; generate_wallet_keys(pub, priv);
+        snprintf(re_pool.address, sizeof(re_pool.address), "REINSURANCE_POOL_%s", pub);
+        strcpy(re_pool.priv_key, priv); accounts[account_count++] = re_pool;
+    }
+
+            // Create Default Miner Wallet
+    if (get_account("MINER_SOLO_01") == NULL) {
+        Account miner; miner.balance = 0.0; miner.nonce = 0;
+        char pub[135], priv[70]; generate_wallet_keys(pub, priv);
+        snprintf(miner.address, sizeof(miner.address), "MINER_SOLO_01_%s", pub);
+        strcpy(miner.priv_key, priv); accounts[account_count++] = miner;
+    }
+}
