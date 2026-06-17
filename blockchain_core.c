@@ -603,3 +603,46 @@ int verify_blockchain() {
     printf("Blockchain verification successful. All ECDSA signatures, Merkle Roots, and Hash links intact.\n");
     return 1;
 }
+
+// Load binary layout structures back into memory
+void load_chain_state() {
+    FILE* file = fopen(CHAIN_FILE, "rb");
+    if (file == NULL) {
+        printf("No chain file found. Starting fresh.\n");
+        return;
+    }
+    printf("Loading chain state...\n");
+
+    // Load Blocks
+    fread(&block_count, sizeof(int), 1, file);
+    for (int i = 0; i < block_count; i++) {
+        fread(&blockchain[i], sizeof(Block), 1, file);
+        blockchain[i].transactions = malloc(blockchain[i].transaction_count * sizeof(Transaction));
+        if (blockchain[i].transactions != NULL) {
+            fread(blockchain[i].transactions, sizeof(Transaction), blockchain[i].transaction_count, file);
+        }
+    }
+
+    // Load Policies
+    fread(&policy_count, sizeof(int), 1, file);
+    fread(policy_roster, sizeof(Policy), policy_count, file);
+
+    // Load Accounts
+    fread(&account_count, sizeof(int), 1, file);
+    fread(accounts, sizeof(Account), account_count, file);
+
+    // Load UTXOs
+    fread(&utxo_count, sizeof(int), 1, file);
+    fread(utxo_set, sizeof(UTXO), utxo_count, file);
+
+    // Load Transaction Audit History
+    fread(&tx_history_count, sizeof(int), 1, file);
+    fread(transaction_history, sizeof(Transaction), tx_history_count, file);
+
+    // Load Global Balances
+    fread(&insurance_pool_balance, sizeof(double), 1, file);
+    fread(&reinsurance_pool_balance, sizeof(double), 1, file);
+    fread(&chain_state, sizeof(ChainState), 1, file);
+
+    fclose(file);
+}
