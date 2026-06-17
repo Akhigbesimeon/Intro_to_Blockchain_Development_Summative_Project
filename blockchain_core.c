@@ -646,3 +646,15 @@ void load_chain_state() {
 
     fclose(file);
 }
+
+// System Transaction Helper
+void process_system_tx(const char* sender_id, const char* receiver_id, int type, const char* success_msg) {
+    Account* sender = get_account(sender_id);
+    if (!sender) { printf("ERROR: Sender account not found.\n"); return; }
+    Transaction tx = {0};
+    snprintf(tx.transaction_id, sizeof(tx.transaction_id), "SYS_%ld", (long)time(NULL));
+    strcpy(tx.sender_address, sender->address); strcpy(tx.receiver_address, receiver_id);
+    tx.amount = 0.0; tx.transaction_type = type; tx.timestamp = time(NULL); tx.sender_nonce = sender->nonce + 1;
+    sign_transaction(&tx, sender->priv_key);
+    if (add_to_mempool(tx, 0.0)) printf("%s\n", success_msg);
+}
