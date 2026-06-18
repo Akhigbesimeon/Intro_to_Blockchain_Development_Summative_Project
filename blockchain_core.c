@@ -892,3 +892,48 @@ int main() {
             }
             if (!found) printf("UTXO not found.\n");
         }
+
+	  // Fraud operations
+        else if (strcmp(cmd, "fraud_review") == 0) {
+            printf("\n-- FRAUD REVIEW QUEUE --\n");
+            int flagged = 0;
+            for(int i=0; i<mempool_size; i++) {
+                if (mempool[i].status == STATUS_SUSPICIOUS) {
+                    printf("TX: %s | Sender: %s | Amount: %.2f\n", mempool[i].tx.transaction_id, mempool[i].tx.sender_address, mempool[i].tx.amount);
+                    flagged++;
+                }
+            }
+            if (flagged == 0) printf("No suspicious transactions found.\n");
+        }
+        else if (strcmp(cmd, "approve_suspicious") == 0 && arg1) {
+            for(int i=0; i<mempool_size; i++) {
+                if (strcmp(mempool[i].tx.transaction_id, arg1) == 0 && mempool[i].status == STATUS_SUSPICIOUS) {
+                    mempool[i].status = STATUS_PENDING;
+                    printf("Transaction %s approved and returned to PENDING queue.\n", arg1);
+                    break;
+                }
+            }
+        }
+        else if (strcmp(cmd, "reject_suspicious") == 0 && arg1) {
+            for(int i=0; i<mempool_size; i++) {
+                if (strcmp(mempool[i].tx.transaction_id, arg1) == 0 && mempool[i].status == STATUS_SUSPICIOUS) {
+                    printf("Transaction %s permanently rejected and dropped from mempool.\n", arg1);
+                    for (int j = i; j < mempool_size - 1; j++) mempool[j] = mempool[j + 1];
+                    mempool_size--;
+                    break;
+                }
+            }
+        }
+        else if (strcmp(cmd, "transaction_history") == 0 || strcmp(cmd, "provider_history") == 0 || strcmp(cmd, "premium_history") == 0 || strcmp(cmd, "claim_history") == 0) {
+            printf("\n-- AUDIT LOG (%d Records) --\n", tx_history_count);
+            for(int i=0; i<tx_history_count; i++) {
+                printf("TX: %s | Type: %d | Amount: %.2f\n", transaction_history[i].transaction_id, transaction_history[i].transaction_type, transaction_history[i].amount);
+            }
+        }
+
+        else {
+            printf("Invalid command or missing arguments. Type 'help' for the syntax manual.\n");
+        }
+    }
+    return 0;
+}
