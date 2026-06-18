@@ -874,3 +874,21 @@ int main() {
         else if (strcmp(cmd, "chain_load") == 0) {
             load_chain_state();
         }
+
+	 // UTXO operations
+        else if (strcmp(cmd, "utxo_view") == 0) {
+            printf("\n-- UTXO SET (%d Outputs) --\n", utxo_count);
+            for(int i=0; i<utxo_count; i++) {
+                printf("%d Owner: %s | Amount: %.2f | Spent: %s\n", i, utxo_set[i].owner_address, utxo_set[i].amount, utxo_set[i].is_spent ? "YES" : "NO");
+            }
+        }
+        else if (strcmp(cmd, "utxo_validate") == 0 && arg1) {
+            int found = 0;
+            for(int i=0; i<utxo_count; i++) {
+                if (strcmp(utxo_set[i].transaction_id, arg1) == 0) {
+                    printf("UTXO %s | Valid: %s\n", arg1, utxo_set[i].is_spent ? "FALSE (Already Spent)" : "TRUE (Unspent)");
+                    found = 1; break;
+                }
+            }
+            if (!found) printf("UTXO not found.\n");
+        }
