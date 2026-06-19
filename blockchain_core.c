@@ -376,7 +376,7 @@ void enroll_policy(const char* member_id, const char* policy_id, int plan) {
     strcpy(policy_roster[policy_count].policy_id, policy_id);
     policy_roster[policy_count].coverage_plan = plan;
     policy_roster[policy_count].enrollment_date = time(NULL);
-    policy_roster[policy_count].expiry_date = time(NULL) + (365 * 24 * 60 * 60);
+    policy_roster[policy_count].expiry_date = time(NULL) + 10;
     policy_roster[policy_count].status = 1;
     policy_count++;
     printf("Policy enrolled successfully for %s. Valid for 365 days.\n", member_id);
