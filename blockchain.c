@@ -510,6 +510,44 @@ int verify_blockchain() {
     return 1;
 }
 
+// Write full blockchain engine states to binary layout
+void save_chain_state() {
+    FILE* file = fopen(CHAIN_FILE, "wb");
+    if (file == NULL) return;
+    printf("Saving chain state to disk...\n");
+
+    // Save Blocks
+    fwrite(&block_count, sizeof(int), 1, file);
+    for (int i = 0; i < block_count; i++) {
+        fwrite(&blockchain[i], sizeof(Block), 1, file);
+        fwrite(blockchain[i].transactions, sizeof(Transaction), blockchain[i].transaction_count, file);
+    }
+
+    // Save Policies
+    fwrite(&policy_count, sizeof(int), 1, file);
+    fwrite(policy_roster, sizeof(Policy), policy_count, file);
+
+    // Save Accounts
+    fwrite(&account_count, sizeof(int), 1, file);
+    fwrite(accounts, sizeof(Account), account_count, file);
+
+    // Save UTXOs
+    fwrite(&utxo_count, sizeof(int), 1, file);
+    fwrite(utxo_set, sizeof(UTXO), utxo_count, file);
+
+    // Save Transaction Audit History
+    fwrite(&tx_history_count, sizeof(int), 1, file);
+    fwrite(transaction_history, sizeof(Transaction), tx_history_count, file);
+
+    // Save Global Balances
+    fwrite(&insurance_pool_balance, sizeof(double), 1, file);
+    fwrite(&reinsurance_pool_balance, sizeof(double), 1, file);
+    fwrite(&chain_state, sizeof(ChainState), 1, file);
+
+    fclose(file);
+    printf("State saved.\n");
+}
+
 // Load binary layout structures back into memory
 void load_chain_state() {
     FILE* file = fopen(CHAIN_FILE, "rb");
