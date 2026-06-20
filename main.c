@@ -1,3 +1,5 @@
+#include "blockchain.h"
+
 // Main function
 int main() {
     char input[512];
