@@ -80,3 +80,31 @@ int main() {
             if (acc) printf("Wallet %s Current Nonce: %u\n", arg1, acc->nonce);
             else printf("Wallet not found.\n");
         }
+
+// Policy operations
+        else if (strcmp(cmd, "enroll_policy") == 0 && arg1 && arg2 && arg3) {
+            enroll_policy(arg1, arg2, atoi(arg3));
+        }
+
+        else if (strcmp(cmd, "view_policy") == 0 && arg1) {
+            Policy* p = get_policy(arg1);
+            if (p) printf("Policy %s | Member: %s | Plan: %d | Status: %s\n", p->policy_id, p->member_id, p->coverage_plan, p->status == 1 ? "ACTIVE" : "EXPIRED");
+            else printf("Policy not found for member %s.\n", arg1);
+        }
+
+        else if (strcmp(cmd, "renew_policy") == 0 && arg1) {
+            Policy* p = get_policy(arg1);
+            if (p) {
+                p->expiry_date = time(NULL) + (365 * 24 * 60 * 60);
+                p->status = 1;
+                printf("Policy for %s renewed for 365 days.\n", arg1);
+            } else printf("Policy not found.\n");
+        }
+
+        else if (strcmp(cmd, "policy_status") == 0 && arg1) {
+            Policy* p = get_policy(arg1);
+            if (p) {
+                if (time(NULL) > p->expiry_date) { p->status = 0; printf("Policy for %s is EXPIRED.\n", arg1); }
+                else printf("Policy for %s is ACTIVE.\n", arg1);
+            } else printf("Policy not found.\n");
+        }
