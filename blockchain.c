@@ -342,3 +342,213 @@ void settle_claim(const char* provider_id, double approved_amount) {
         }
     }
 }
+
+// Sort rule
+int compare_mempool_entries(const void* a, const void* b) {
+    MempoolEntry* entryA = (MempoolEntry*)a;
+    MempoolEntry* entryB = (MempoolEntry*)b;
+    if (entryA->fee > entryB->fee) return -1;
+    if (entryA->fee < entryB->fee) return 1;
+    if (entryA->tx.timestamp < entryB->tx.timestamp) return -1;
+    if (entryA->tx.timestamp > entryB->tx.timestamp) return 1;
+    return 0;
+}
+
+// Validate, check high-frequency fraud rules, and add to queue
+int add_to_mempool(Transaction tx, double fee) {
+    if (mempool_size >= MAX_MEMPOOL_SIZE) return 0;
+
+    Account* sender = get_account(tx.sender_address);
+    if (sender == NULL) { printf("Transaction rejected: Unknown Sender Address.\n"); return 0; }
+
+    if (!verify_ecdsa_signature(&tx, sender->address)) {
+        printf("Transaction rejected: Invalid ECDSA digital signature.\n"); return 0;
+    }
+    if (tx.sender_nonce != sender->nonce + 1) {
+        printf("Transaction rejected: Invalid Nonce (Replay Protection).\n"); return 0;
+    }
+    if (sender->balance < (tx.amount + fee)) {
+        printf("Transaction rejected: Insufficient AHT balance.\n"); return 0;
+    }
+
+    int initial_status = STATUS_PENDING;
+    int count = 0;
+    time_t twenty_four_hours = 24 * 60 * 60;
+
+    for (int i = 0; i < tx_history_count; i++) {
+        if (strcmp(transaction_history[i].sender_address, tx.sender_address) == 0) {
+            if (tx.timestamp - transaction_history[i].timestamp <= twenty_four_hours) count++;
+        }
+    }
+
+    for (int i = 0; i < mempool_size; i++) {
+        if (strcmp(mempool[i].tx.sender_address, tx.sender_address) == 0) {
+            if (tx.timestamp - mempool[i].tx.timestamp <= twenty_four_hours) count++;
+        }
+    }
+
+    if (count >= 3) {
+        printf("WARNING: High-frequency transactions detected. Flagging SUSPICIOUS.\n");
+        initial_status = STATUS_SUSPICIOUS;
+    }
+    mempool[mempool_size].tx = tx;
+    mempool[mempool_size].fee = fee;
+    mempool[mempool_size].status = initial_status;
+    mempool_size++;
+    qsort(mempool, mempool_size, sizeof(MempoolEntry), compare_mempool_entries);
+    return 1;
+}
+
+// Recalculate PoW target difficulty every 10 blocks
+void adjust_difficulty() {
+    if (block_count < 10 || block_count % 10 != 0) return;
+    time_t time_diff = blockchain[block_count - 1].timestamp - blockchain[block_count - 10].timestamp;
+    double average_time = (double)time_diff / 10.0;
+    uint32_t old_diff = chain_state.current_difficulty;
+
+    if (average_time < 30.0) chain_state.current_difficulty++;
+    else if (average_time > 90.0 && chain_state.current_difficulty > 1) chain_state.current_difficulty--;
+
+    chain_state.last_retarget_block = block_count;
+    printf("\nDIFFICULTY RETARGET: Avg Time = %.2f sec | Old Diff = %u | New Diff = %u\n", average_time, old_diff, chain_state.current_difficulty);
+}
+
+// Package unconfirmed transactions and execute Proof-of-Work loop
+void mine_block() {
+    if (mempool_size == 0) {
+        printf("No pending transactions in mempool to mine.\n");
+        return;
+    }
+
+    Block new_block;
+    new_block.timestamp = time(NULL);
+    new_block.difficulty = chain_state.current_difficulty;
+    new_block.nonce = 0;
+    strcpy(new_block.miner_id, "ALU_MINER_POOL");
+
+    if (block_count == 0) strcpy(new_block.previous_hash, "0000000000000000000000000000000000000000000000000000000000000000");
+    else strcpy(new_block.previous_hash, blockchain[block_count - 1].block_id);
+
+    new_block.transaction_count = 0;
+    new_block.transactions = malloc(5 * sizeof(Transaction));
+
+    for (int i = 0; i < mempool_size && new_block.transaction_count < 5; i++) {
+        if (mempool[i].status == STATUS_PENDING) {
+            new_block.transactions[new_block.transaction_count] = mempool[i].tx;
+            new_block.transaction_count++;
+            mempool[i].status = STATUS_CONFIRMED;
+
+            // Update balances and nonces
+            Account* s = get_account(mempool[i].tx.sender_address);
+            Account* r = get_account(mempool[i].tx.receiver_address);
+            if (s) { s->balance -= mempool[i].tx.amount; s->nonce++; }
+            if (r) { r->balance += mempool[i].tx.amount; }
+
+            if (tx_history_count < MAX_TX_HISTORY) {
+                transaction_history[tx_history_count] = mempool[i].tx;
+                tx_history_count++;
+            }
+        }
+    }
+
+    if (new_block.transaction_count == 0) {
+        printf("Mempool contains only SUSPICIOUS transactions. Mine aborted.\n");
+        free(new_block.transactions);
+        return;
+    }
+
+    compute_merkle_root(new_block.transactions, new_block.transaction_count, new_block.merkle_root);
+
+    printf("Mining block... (Difficulty: %u)\n", chain_state.current_difficulty);
+    char current_hash[65];
+
+    while (1) {
+        calculate_block_hash(&new_block, current_hash);
+        if (is_hash_valid(current_hash, new_block.difficulty)) {
+            strcpy(new_block.block_id, current_hash);
+            printf("Block %d mined! Hash: %s\n", block_count, new_block.block_id);
+            break;
+        }
+        new_block.nonce++;
+    }
+
+    blockchain[block_count] = new_block;
+    block_count++;
+    adjust_difficulty();
+}
+
+// Verify blockchain
+int verify_blockchain() {
+    printf("Running full cryptographic blockchain verification...\n");
+    for (int i = 0; i < block_count; i++) {
+        Block* current_block = &blockchain[i];
+        if (i > 0) {
+            Block* previous_block = &blockchain[i - 1];
+            if (strcmp(current_block->previous_hash, previous_block->block_id) != 0) {
+                printf("CHAIN BROKEN at Block %d: Previous Hash link severed.\n", i); return 0;
+            }
+            if (current_block->timestamp <= previous_block->timestamp) {
+                printf("TIMESTAMP ERROR at Block %d.\n", i); return 0;
+            }
+        }
+        char recomputed_hash[65];
+        calculate_block_hash(current_block, recomputed_hash);
+        if (strcmp(current_block->block_id, recomputed_hash) != 0) {
+            printf("TAMPER DETECTED at Block %d: Header Hash mismatch.\n", i); return 0;
+        }
+        if (!is_hash_valid(recomputed_hash, current_block->difficulty)) {
+            printf("CONSENSUS FAILURE at Block %d: Proof-of-Work invalid.\n", i); return 0;
+        }
+
+        char recomputed_merkle_root[65];
+        compute_merkle_root(current_block->transactions, current_block->transaction_count, recomputed_merkle_root);
+        if (strcmp(current_block->merkle_root, recomputed_merkle_root) != 0) {
+            printf("TAMPER DETECTED at Block %d: Merkle Root mismatch.\n", i); return 0;
+        }
+    }
+    printf("Blockchain verification successful. All ECDSA signatures, Merkle Roots, and Hash links intact.\n");
+    return 1;
+}
+
+// Load binary layout structures back into memory
+void load_chain_state() {
+    FILE* file = fopen(CHAIN_FILE, "rb");
+    if (file == NULL) {
+        printf("No chain file found. Starting fresh.\n");
+        return;
+    }
+    printf("Loading chain state...\n");
+
+    // Load Blocks
+    fread(&block_count, sizeof(int), 1, file);
+    for (int i = 0; i < block_count; i++) {
+        fread(&blockchain[i], sizeof(Block), 1, file);
+        blockchain[i].transactions = malloc(blockchain[i].transaction_count * sizeof(Transaction));
+        if (blockchain[i].transactions != NULL) {
+            fread(blockchain[i].transactions, sizeof(Transaction), blockchain[i].transaction_count, file);
+        }
+    }
+
+    // Load Policies
+    fread(&policy_count, sizeof(int), 1, file);
+    fread(policy_roster, sizeof(Policy), policy_count, file);
+
+    // Load Accounts
+    fread(&account_count, sizeof(int), 1, file);
+    fread(accounts, sizeof(Account), account_count, file);
+
+    // Load UTXOs
+    fread(&utxo_count, sizeof(int), 1, file);
+    fread(utxo_set, sizeof(UTXO), utxo_count, file);
+
+    // Load Transaction Audit History
+    fread(&tx_history_count, sizeof(int), 1, file);
+    fread(transaction_history, sizeof(Transaction), tx_history_count, file);
+
+    // Load Global Balances
+    fread(&insurance_pool_balance, sizeof(double), 1, file);
+    fread(&reinsurance_pool_balance, sizeof(double), 1, file);
+    fread(&chain_state, sizeof(ChainState), 1, file);
+
+    fclose(file);
+}
