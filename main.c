@@ -179,3 +179,36 @@ int main() {
         else if (strcmp(cmd, "reinsurance_balance") == 0) {
             printf("Reinsurance Pool: %.2f AHT\n", reinsurance_pool_balance);
         }
+
+// Blockchain & Mining operations
+        else if (strcmp(cmd, "mempool_view") == 0) {
+            printf("\n-- MEMPOOL (%d Txs) --\n", mempool_size);
+            for(int i=0; i<mempool_size; i++) {
+                printf("%d Sender: %s | Amount: %.2f | Status: %s\n", i, mempool[i].tx.sender_address, mempool[i].tx.amount,
+                       mempool[i].status == STATUS_PENDING ? "PENDING" : (mempool[i].status == STATUS_SUSPICIOUS ? "SUSPICIOUS" : "CONFIRMED"));
+            }
+        }
+        else if (strcmp(cmd, "mine_solo") == 0) {
+            mine_block("MINER_SOLO_01", 0);
+        }
+        else if (strcmp(cmd, "mine_pool") == 0) {
+            mine_block("ALU_MINER_POOL", 1);
+        }
+        else if (strcmp(cmd, "blockchain_view") == 0) {
+            printf("\n-- BLOCKCHAIN (%d Blocks) --\n", block_count);
+            for(int i=0; i<block_count; i++) {
+                printf("Block %d | Hash: %s... | Txs: %u | Diff: %u\n", i, blockchain[i].block_id, blockchain[i].transaction_count, blockchain[i].difficulty);
+            }
+        }
+        else if (strcmp(cmd, "difficulty_status") == 0) {
+            printf("Difficulty: %u | Reward: %.2f AHT\n", chain_state.current_difficulty, chain_state.block_reward);
+        }
+        else if (strcmp(cmd, "blockchain_verify") == 0) {
+            verify_blockchain();
+        }
+        else if (strcmp(cmd, "chain_save") == 0) {
+            save_chain_state();
+        }
+        else if (strcmp(cmd, "chain_load") == 0) {
+            load_chain_state();
+        }
