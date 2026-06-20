@@ -34,10 +34,10 @@ To compile and run this application, your system must have the following install
 * Clone or download this repository to your local machine.
 
 * Compile the source code. Note: Use gcc and link the OpenSSL crypto library (-lcrypto). Run the following command in your terminal:
-`gcc -Wall -Wextra -o blockchain_core blockchain_core.c -lcrypto`
+`gcc -Wall main.c blockchain.c -o alu_blockchain -lcrypto`
 
 ## Running the Program
-Execute the compiled program: `./blockchain_core`
+Execute the compiled program: `./alu_blockchain`
 
 ## The Startup Blockade
 If the node loads a pre-existing chain state from disk (`alu_chain_state.bin`), all commands are locked by default. You must run the cryptographic audit to mathematically verify the chain's integrity before interacting: `alu-chain> blockchain_verify`
