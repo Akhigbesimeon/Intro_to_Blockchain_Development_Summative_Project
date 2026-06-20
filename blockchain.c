@@ -414,7 +414,7 @@ void adjust_difficulty() {
 }
 
 // Package unconfirmed transactions and execute Proof-of-Work loop
-void mine_block() {
+void mine_block(const char* miner_id, int is_pool) {
     if (mempool_size == 0) {
         printf("No pending transactions in mempool to mine.\n");
         return;
