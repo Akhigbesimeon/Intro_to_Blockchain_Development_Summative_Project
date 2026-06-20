@@ -221,3 +221,124 @@ int is_hash_valid(const char* hash, uint32_t difficulty) {
     for (uint32_t i = 0; i < difficulty; i++) if (hash[i] != '0') return 0;
     return 1;
 }
+
+// Account & UTXO management
+Account* get_account(const char* address) {
+    for (int i = 0; i < account_count; i++) {
+        if (strstr(accounts[i].address, address) != NULL) return &accounts[i];
+    }
+    return NULL;
+}
+
+void create_utxo(const char* tx_id, const char* owner, double amount) {
+    if (utxo_count >= MAX_UTXOS) return;
+    strcpy(utxo_set[utxo_count].transaction_id, tx_id);
+    strcpy(utxo_set[utxo_count].owner_address, owner);
+    utxo_set[utxo_count].amount = amount;
+    utxo_set[utxo_count].is_spent = 0;
+    utxo_count++;
+}
+
+int consume_utxos_for_amount(const char* owner, double required_amount) {
+    double accumulated = 0.0;
+    for (int i = 0; i < utxo_count; i++) {
+        if (strcmp(utxo_set[i].owner_address, owner) == 0 && utxo_set[i].is_spent == 0) {
+            utxo_set[i].is_spent = 1;
+            accumulated += utxo_set[i].amount;
+            if (accumulated >= required_amount) {
+                if (accumulated > required_amount) {
+                    char change_id[65];
+                    snprintf(change_id, sizeof(change_id), "CHANGE_%ld", (long)time(NULL));
+                    create_utxo(change_id, owner, accumulated - required_amount);
+                }
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// Look up policy by member identifier
+Policy* get_policy(const char* member_id) {
+    for (int i = 0; i < policy_count; i++) {
+        if (strcmp(policy_roster[i].member_id, member_id) == 0) return &policy_roster[i];
+    }
+    return NULL;
+}
+
+// Register member policy with 365 days validity
+void enroll_policy(const char* member_id, const char* policy_id, int plan) {
+    if (get_account(member_id) == NULL) {
+        printf("ERROR: Member wallet %s not found. Register member first.\n", member_id);
+        return;
+    }
+
+    Policy* existing_policy = get_policy(member_id);
+    if (existing_policy != NULL && existing_policy->status == 1) {
+        printf("ERROR: Member %s already has an ACTIVE policy (%s).\n", member_id, existing_policy->policy_id);
+        return;
+    }
+    strcpy(policy_roster[policy_count].member_id, member_id);
+    strcpy(policy_roster[policy_count].policy_id, policy_id);
+    policy_roster[policy_count].coverage_plan = plan;
+    policy_roster[policy_count].enrollment_date = time(NULL);
+    policy_roster[policy_count].expiry_date = time(NULL) + (365 * 24 * 60 * 60);
+    policy_roster[policy_count].status = 1;
+    policy_count++;
+    printf("Policy enrolled successfully for %s. Valid for 365 days.\n", member_id);
+}
+
+// Split premium and route 5% to reinsurance fund
+void pay_premium(const char* member_id, double amount) {
+    Account* acc = get_account(member_id);
+    if (acc == NULL) {
+        printf("ERROR: Member wallet %s not found.\n", member_id);
+        return;
+    }
+    if (acc->balance < amount) {
+        printf("ERROR: Insufficient balance. Wallet only has %.2f AHT.\n", acc->balance);
+        return;
+    }
+
+    acc->balance -= amount;
+
+    double reinsurance_cut = amount * 0.05;
+    double main_pool_cut = amount - reinsurance_cut;
+
+    insurance_pool_balance += main_pool_cut;
+    reinsurance_pool_balance += reinsurance_cut;
+
+    char utxo_id[65];
+    snprintf(utxo_id, sizeof(utxo_id), "PREM_%ld", (long)time(NULL));
+    create_utxo(utxo_id, "INSURANCE_POOL", main_pool_cut);
+
+    printf("Premium Processed for %s: %.2f AHT.\n", member_id, amount);
+    printf("-> %.2f AHT deducted from Member Wallet\n", amount);
+    printf("-> %.2f AHT to Main Insurance Pool (UTXO Created)\n", main_pool_cut);
+    printf("-> %.2f AHT sent via REINSURANCE_CONTRIBUTION\n", reinsurance_cut);
+}
+
+// Settle medical claims and draw excess from reinsurance if >1000 AHT
+void settle_claim(const char* provider_id, double approved_amount) {
+    if (approved_amount <= 1000.0) {
+        if (!consume_utxos_for_amount("INSURANCE_POOL", approved_amount)) {
+            printf("Double-Spend Prevented: Pool lacks unspent UTXOs for settlement.\n"); return;
+        }
+        insurance_pool_balance -= approved_amount;
+        printf("Settlement of %.2f AHT paid fully by Main Pool to %s.\n", approved_amount, provider_id);
+    } else {
+        double excess = approved_amount - 1000.0;
+        if (!consume_utxos_for_amount("INSURANCE_POOL", 1000.0)) {
+            printf("Double-Spend Prevented: Pool lacks UTXOs.\n"); return;
+        }
+        insurance_pool_balance -= 1000.0;
+        if (reinsurance_pool_balance >= excess) {
+            reinsurance_pool_balance -= excess;
+            printf("Settlement split for %s:\n", provider_id);
+            printf("-> 1000.00 AHT paid by Main Pool\n");
+            printf("-> %.2f AHT paid by Reinsurance Pool\n", excess);
+        } else {
+            printf("WARNING: Reinsurance Pool insufficient to cover excess. Manual review required.\n");
+        }
+    }
+}
